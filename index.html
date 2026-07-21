@@ -557,7 +557,7 @@ A ready-to-teach, textbook-free humanities curriculum built around enduring huma
         </div>
         <div class="feat-grid">
           <div>
-            <h3 style="margin-bottom:18px">Every unit includes</h3>
+            <h3 style="margin-bottom:18px">Every unit includes:</h3>
             <ul class="checks">
               <li>Curated, textbook-free readings from classical and modern thinkers</li>
               <li>Historical and philosophical context for teachers</li>
@@ -2207,7 +2207,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
         <a href="#/about">About Us</a>
         <a href="#/unit/5">Unit 5 &mdash; Who Am I?</a>
         <a href="#/pricing">View pricing</a>
-        <a href="#/invoice">Request an invoice</a>
+        <a href="#/invoice">Pay by Purchase Order</a>
       </div>
       <div class="fcol">
         <div class="fhead">Legal</div>
@@ -2324,15 +2324,15 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
           verification -> {{to_email}} {{to_name}} {{code}}
           invite       -> {{to_email}} {{from_name}} {{plan_name}} {{code}} {{join_url}}
      ============================================================ */
-  var TEST_MODE = true;
+  var TEST_MODE = false;
 
-  var STRIPE_LINKS = { indiv:"", group:"", inst:"" };
+  var STRIPE_LINKS = { indiv:"https://buy.stripe.com/14A28jcwM8YOdOz0g9ak003", group:"https://buy.stripe.com/eVq7sD40g6QG7qb8MFak005", inst:"https://buy.stripe.com/bJebITdAQdf4h0L0g9ak006" };
 
   var EMAILJS = {
-    publicKey:  "",   // EmailJS > Account > Public Key
-    serviceId:  "",   // EmailJS > Email Services
-    verifyTpl:  "",   // template id for verification codes
-    inviteTpl:  ""    // template id for plan invites
+    publicKey:  "YqMKnkreIBZ4T9cKs",   // EmailJS > Account > Public Key
+    serviceId:  "service_n59ejqp",   // EmailJS > Email Services
+    verifyTpl:  "template_pjzdzyn",   // template id for verification codes
+    inviteTpl:  "template_7zm7vfm"    // template id for plan invites
   };
 
   var PLANS = {
