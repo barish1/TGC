@@ -215,7 +215,7 @@ A ready-to-teach, textbook-free humanities curriculum built around enduring huma
   footer.site .fcol{display:flex;flex-direction:column;gap:11px}
   footer.site .fhead{font-size:.68rem;letter-spacing:.14em;text-transform:uppercase;color:#f0b892;font-weight:700}
   footer.site .flinks a{color:#dbe8ea;text-decoration:none;font-weight:600}
-  footer.site .flinks a:hover{color:var(--gold)}
+  footer.site .flinks a:hover{color:#f0b892}
   footer.site .rule{border:0;border-top:1px solid rgba(255,255,255,.12);margin:40px 0 20px}
   footer.site .fine{color:#8ba3a8;font-size:.86rem}
 
@@ -453,16 +453,21 @@ A ready-to-teach, textbook-free humanities curriculum built around enduring huma
 
   /* ---------- contact popover (mailto-free, works on any browser) ---------- */
   .contact-wrap{position:relative;display:inline-block}
-  .contact-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:70;width:250px;display:block;
+  .contact-pop{position:absolute;left:0;bottom:calc(100% + 10px);z-index:70;width:280px;display:block;
     background:var(--surface);color:var(--ink);border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow-lg);padding:16px;text-align:left}
   .contact-pop[hidden]{display:none}
   .cp-lead{display:block;font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold-deep);font-weight:700;margin-bottom:2px}
+    .cp-intro{display:block;font-size:.86rem;line-height:1.45;color:var(--ink);margin-bottom:10px}
   .cp-addr{display:block;font-weight:700;word-break:break-all;color:var(--ink);margin-bottom:12px}
   .cp-actions{display:flex;flex-wrap:wrap;gap:8px}
   .cp-btn{flex:1 1 auto;text-align:center;border:1px solid var(--line);border-radius:9px;padding:8px 10px;font:inherit;font-size:.84rem;font-weight:700;cursor:pointer;background:var(--surface);color:var(--brand-2);text-decoration:none}
   .cp-btn:hover{background:var(--surface-2)}
   .cp-btn.cp-primary{background:var(--brand);color:#fff;border-color:var(--brand);flex-basis:100%}
   .cp-btn:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+    footer.site .contact-wrap #contactLink{color:#dbe8ea;text-decoration:none;font-weight:600}
+    footer.site .contact-wrap #contactLink:hover{color:#f0b892}
+    footer.site .contact-pop .cp-btn{color:var(--ink)}
+    footer.site .contact-pop .cp-btn.cp-primary{color:#fff}
   .cp-note{display:block;margin-top:10px;font-size:.82rem;color:#1f4f38;min-height:1em}
 
   /* ---------- account details pane ---------- */
@@ -483,6 +488,7 @@ A ready-to-teach, textbook-free humanities curriculum built around enduring huma
   .ad-confirm-actions{display:flex;gap:8px;justify-content:flex-end}
   .po-fallback{margin-top:10px;font-size:.9rem}
   .po-fallback a{color:var(--brand-2);font-weight:700}
+  .pricing-tax-note{max-width:640px;margin:14px auto 0;text-align:center;font-size:.76rem;line-height:1.5;color:var(--muted)}
 </style>
 </head>
 <body>
@@ -652,6 +658,7 @@ A ready-to-teach, textbook-free humanities curriculum built around enduring huma
             <button class="btn btn-primary" data-open-checkout="inst">Get Started</button>
           </div>
         </div>
+        <p class="pricing-tax-note">Applicable sales tax, if required, will be calculated at checkout. Tax-exempt organizations may be asked to provide valid exemption documentation.</p>
         <p class="po-entry">Buying for a school or district? <a href="#/invoice">Pay by purchase order &rarr;</a></p>
       </div>
     </section>
@@ -2221,9 +2228,9 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
         <a href="#/refunds">Refund Policy</a>
         <a href="#/accessibility">Accessibility Statement</a>
         <span class="contact-wrap">
-          <a href="mailto:info@thegreatcurriculum.com" id="contactLink" aria-haspopup="dialog" aria-expanded="false">Contact</a>
+          <a href="mailto:info@thegreatcurriculum.com" id="contactLink" aria-haspopup="dialog" aria-expanded="false">Contact and Support</a>
           <span class="contact-pop" id="contactPop" role="dialog" aria-label="Contact The Great Curriculum" hidden>
-            <span class="cp-lead">Email us</span>
+            <span class="cp-intro">We are very responsive to any questions or concerns. Contact us here:</span>
             <span class="cp-addr">info@thegreatcurriculum.com</span>
             <span class="cp-actions">
               <button type="button" class="cp-btn cp-primary" id="cpCopy">Copy address</button>
