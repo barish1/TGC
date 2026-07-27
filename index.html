@@ -2362,6 +2362,10 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
 
   var STRIPE_LINKS = { indiv:"https://buy.stripe.com/14A28jcwM8YOdOz0g9ak003", group:"https://buy.stripe.com/eVq7sD40g6QG7qb8MFak005", inst:"https://buy.stripe.com/bJebITdAQdf4h0L0g9ak006" };
 
+  // ===== Backend (Supabase): fill these to enable cross-device accounts, plans, and Stripe activation. Leave blank to keep single-device localStorage mode. =====
+  var SUPABASE_URL = "https://nmmvusmnqiezaiqfevir.supabase.co";
+  var SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5tbXZ1c21ucWllemFpcWZldmlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODUxMDIzNTAsImV4cCI6MjEwMDY3ODM1MH0.vBfh4ia6dPfkG9PrGYxq3AuDAg_YNAnhjByecG_c_VQ";
+
   var EMAILJS = {
     publicKey:  "YqMKnkreIBZ4T9cKs",   // EmailJS > Account > Public Key
     serviceId:  "service_n59ejqp",   // EmailJS > Email Services
@@ -2421,13 +2425,104 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
   function savePlans(p){ S(PKEY, JSON.stringify(p)); }
   function getInvites(){ try{ return JSON.parse(G(IKEY)||'{}'); }catch(e){ return {}; } }
   function saveInvites(i){ S(IKEY, JSON.stringify(i)); }
-  function currentUser(){ var e=G(SKEY); if(!e) return null; var u=getUsers(); return u[e]||null; }
+
+  /* ===================== Supabase backend (optional) ===================== */
+  var USE_SUPA = !!(SUPABASE_URL && SUPABASE_ANON_KEY);
+  var supa = null;
+  var SESSION = { user:null, plan:null };
+  function loadSupabase(){
+    return new Promise(function(res, rej){
+      if(!USE_SUPA) return rej(new Error('no-supa'));
+      if(supa) return res(supa);
+      var s=document.createElement('script');
+      s.src='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      s.onload=function(){ try{ supa=window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {auth:{persistSession:true, autoRefreshToken:true}}); res(supa); }catch(e){ rej(e); } };
+      s.onerror=function(){ rej(new Error('supa-load-failed')); };
+      document.head.appendChild(s);
+    });
+  }
+  function supaUser(u){ if(!u) return null; return { id:u.id, email:u.email, name:(u.user_metadata&&u.user_metadata.name)||u.email }; }
+  function supaFetchPlan(){
+    if(!supa || !SESSION.user){ SESSION.plan=null; return Promise.resolve(null); }
+    var email=SESSION.user.email, uid=SESSION.user.id;
+    return supa.from('memberships').select('*').or('owner.eq.'+uid+',members.cs.{"'+email+'"}').order('created',{ascending:true}).limit(1)
+      .then(function(r){
+        var m=(r.data&&r.data[0])||null;
+        SESSION.plan = m ? { id:m.id, type:m.type, admin:m.owner_email||email, members:m.members||[email], created:m.created } : null;
+        return SESSION.plan;
+      }, function(){ return SESSION.plan; });
+  }
+  function supaRefresh(){ try{ refreshAuthUI(); }catch(e){} try{ applyGates(); }catch(e){} }
+  function supaBoot(){
+    loadSupabase().then(function(){
+      supa.auth.getSession().then(function(r){
+        var sess=r.data&&r.data.session; SESSION.user=supaUser(sess&&sess.user); return supaFetchPlan();
+      }).then(function(){ supaRefresh(); supaCheckStripeReturn(); });
+      supa.auth.onAuthStateChange(function(evt, sess){ SESSION.user=supaUser(sess&&sess.user); supaFetchPlan().then(supaRefresh); });
+    }).catch(function(){ supaRefresh(); });
+  }
+  function supaDoSignup(name,email,pw,err){
+    loadSupabase().then(function(){ return supa.auth.signUp({ email:email, password:pw, options:{ data:{ name:name } } }); })
+    .then(function(r){
+      if(r.error){ err.textContent=r.error.message; return; }
+      if(r.data && r.data.session){ SESSION.user=supaUser(r.data.user); supaFetchPlan().then(function(){ supaRefresh(); closeModal(); runAfterAuth(); }); }
+      else { showPane('signin'); document.getElementById('si-err').textContent='Account created. Check your email to confirm it, then sign in here.'; }
+    }).catch(function(){ err.textContent='Could not reach the sign-up service. Please try again.'; });
+  }
+  function supaDoSignin(email,pw,err){
+    loadSupabase().then(function(){ return supa.auth.signInWithPassword({ email:email, password:pw }); })
+    .then(function(r){
+      if(r.error){ err.textContent=/confirm/i.test(r.error.message||'')?'Please confirm your email first \u2014 check your inbox for the link.':'Email or password is incorrect.'; return; }
+      SESSION.user=supaUser(r.data.user); err.textContent='';
+      supaFetchPlan().then(function(){ supaRefresh(); closeModal(); runAfterAuth(); });
+    }).catch(function(){ err.textContent='Could not reach the sign-in service. Please try again.'; });
+  }
+  function supaSignOut(){ if(!supa){ SESSION.user=SESSION.plan=null; supaRefresh(); return; } supa.auth.signOut().then(function(){ SESSION.user=null; SESSION.plan=null; supaRefresh(); }); }
+  function supaSaveName(name, ok, err){
+    loadSupabase().then(function(){ return supa.auth.updateUser({ data:{ name:name } }); })
+    .then(function(r){ if(r.error){ err.textContent=r.error.message; return; } if(SESSION.user) SESSION.user.name=name; refreshAuthUI(); ok.textContent='Saved.'; })
+    .catch(function(){ err.textContent='Could not save right now.'; });
+  }
+  function supaActivate(type){
+    return loadSupabase().then(function(){ return supa.from('memberships').insert({ owner:SESSION.user.id, owner_email:SESSION.user.email, type:type, members:[SESSION.user.email] }).select().single(); })
+    .then(function(r){ if(!r.error && r.data){ SESSION.plan={id:r.data.id,type:r.data.type,admin:SESSION.user.email,members:r.data.members||[SESSION.user.email],created:r.data.created}; } supaRefresh(); return SESSION.plan; });
+  }
+  function supaCancel(){
+    var p=SESSION.plan; if(!p||!supa) return; var email=SESSION.user.email;
+    var q = (p.admin===email) ? supa.from('memberships').delete().eq('id',p.id)
+                              : supa.from('memberships').update({ members:(p.members||[]).filter(function(e){return e!==email;}) }).eq('id',p.id);
+    q.then(function(){ SESSION.plan=null; document.getElementById('ad-cancel-confirm').hidden=true; document.getElementById('ad-ok').textContent='Your plan has been cancelled.'; renderAdPlan(); supaRefresh(); });
+  }
+  function supaDoJoin(code, err){
+    loadSupabase().then(function(){ return supa.rpc('join_plan', { p_code:code }); })
+    .then(function(rr){
+      if(rr.error){ err.textContent=rr.error.message||'That invite code isn\u2019t valid.'; return; }
+      closeJoin(); supaFetchPlan().then(function(){ supaRefresh(); location.hash='#/community'; });
+    }).catch(function(){ err.textContent='Could not reach the server. Please try again.'; });
+  }
+  function supaCreateInvite(email, planId, cb){
+    var code=rndCode(8);
+    loadSupabase().then(function(){ return supa.from('invites').insert({ code:code, plan_id:planId, email:email, used:false }); })
+    .then(function(r){ cb((r&&!r.error)?code:null); }, function(){ cb(null); });
+  }
+  function supaCheckStripeReturn(){
+    if(!/[?&]checkout=success/.test(location.search)) return;
+    var tries=0;
+    (function poll(){
+      supaFetchPlan().then(function(pl){
+        if(pl){ history.replaceState(null,'',location.pathname+location.hash); supaRefresh(); location.hash=(PLANS[pl.type]&&PLANS[pl.type].community)?'#/community':'#/unit/1'; return; }
+        if(tries++<20){ setTimeout(poll, 1500); } else { history.replaceState(null,'',location.pathname+location.hash); }
+      });
+    })();
+  }
+  function currentUser(){ if(USE_SUPA) return SESSION.user; var e=G(SKEY); if(!e) return null; var u=getUsers(); return u[e]||null; }
   function validEmail(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e); }
   function rndCode(n){ var s='', A='ABCDEFGHJKMNPQRSTUVWXYZ23456789'; for(var i=0;i<n;i++) s+=A[Math.floor(Math.random()*A.length)]; return s; }
   function initials(u){ var n=(u&&u.name||'').trim(); if(n) return n[0].toUpperCase(); return ((u&&u.email||'?')[0]||'?').toUpperCase(); }
 
   /* plan helpers */
   function myPlan(){
+    if(USE_SUPA) return SESSION.plan;
     var u = currentUser(); if(!u || !u.planId) return null;
     var p = getPlans()[u.planId]; return p || null;
   }
@@ -2564,6 +2659,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
     if(pw.length < 8){ err.textContent='Password must be at least 8 characters.'; return; }
     if(pw !== pw2){ err.textContent='Passwords do not match.'; return; }
     err.textContent='';
+    if(USE_SUPA){ supaDoSignup(name,email,pw,err); return; }
     pending = { name:name, email:email, passHash:obfuscate(pw), code:(''+Math.floor(100000+Math.random()*900000)) };
     document.getElementById('vf-email').textContent = email;
     document.getElementById('vf-code').value='';
@@ -2658,6 +2754,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
     ok.textContent='';
     if(name.length<2){ err.textContent='Please enter your full name.'; return; }
     err.textContent='';
+    if(USE_SUPA){ supaSaveName(name, ok, err); return; }
     var users=getUsers(); users[u.email].name=name; saveUsers(users);
     refreshAuthUI();
     ok.textContent='Saved.';
@@ -2679,6 +2776,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
   });
   document.getElementById('ad-cancel-yes').addEventListener('click', function(){
     var u=currentUser(); if(!u) return;
+    if(USE_SUPA){ supaCancel(); return; }
     var plans=getPlans(); var p=u.planId?plans[u.planId]:null;
     if(p){
       // remove me from the plan's member list; if I'm the only member, drop the plan
@@ -2698,6 +2796,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
     var email = document.getElementById('si-email').value.trim().toLowerCase();
     var pw = document.getElementById('si-pw').value;
     var err = document.getElementById('si-err');
+    if(USE_SUPA){ supaDoSignin(email,pw,err); return; }
     var a = getUsers()[email];
     if(!a){
       err.textContent='No account for that email exists in this browser. Accounts are saved on the device and web address where they were created \u2014 if you signed up elsewhere (or before the site moved to a new domain), please create a new account here.';
@@ -2728,6 +2827,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
     openAcct(!acctMenu.classList.contains('open'));
   });
   document.getElementById('signoutBtn').addEventListener('click', function(){
+    if(USE_SUPA){ supaSignOut(); openAcct(false); return; }
     D(SKEY); openAcct(false); refreshAuthUI();
   });
   document.addEventListener('click', function(e){ if(!e.target.closest('.acct')) openAcct(false); });
@@ -2849,15 +2949,17 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
   coModal.addEventListener('mousedown', function(e){ if(e.target===coModal) closeCheckout(); });
   document.getElementById('co-pay').addEventListener('click', function(){
     if(TEST_MODE){
+      if(USE_SUPA){ supaActivate(coPlan).then(function(p){ closeCheckout(); location.hash=(p && PLANS[coPlan].community)?'#/community':'#/unit/1'; }); return; }
       var p = activatePlan(coPlan);
       closeCheckout();
       if(p && PLANS[coPlan].community){ location.hash = '#/community'; }
-      else { location.hash = '#/unit/5'; }
+      else { location.hash = '#/unit/1'; }
       return;
     }
     var link = STRIPE_LINKS[coPlan]; if(!link) return;
     var u = currentUser();
-    var url = link + (link.indexOf('?')>-1?'&':'?') + 'client_reference_id=' + encodeURIComponent(u?u.email:'guest');
+    var ref = USE_SUPA ? (u&&u.id) : (u&&u.email);
+    var url = link + (link.indexOf('?')>-1?'&':'?') + 'client_reference_id=' + encodeURIComponent(ref||'guest');
     if(u) url += '&prefilled_email=' + encodeURIComponent(u.email);
     window.location.href = url;
   });
@@ -2963,10 +3065,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
       if(p.members.indexOf(email)>-1){ err.textContent='That person is already on this plan.'; return; }
       if(seatsLeft()===0){ err.textContent='This plan has no seats left.'; return; }
       err.textContent='';
-      var code = rndCode(8);
-      var inv = getInvites();
-      inv[code] = { planId:p.id, email:email, by:me.email, created:Date.now(), used:false };
-      saveInvites(inv);
+      var proceed = function(code){
       var joinUrl = location.origin + location.pathname + '#/join/' + code;
       out.hidden = false;
       if(!emailConfigured()){
@@ -2979,6 +3078,12 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
       }
       document.getElementById('inv-email').value='';
       renderPending();
+      };
+      if(USE_SUPA){ supaCreateInvite(email, p.id, function(code){ if(!code){ err.textContent='Could not create the invite. Please try again.'; return; } proceed(code); }); return; }
+      var code = rndCode(8);
+      var inv = getInvites();
+      inv[code] = { planId:p.id, email:email, by:me.email, created:Date.now(), used:false };
+      proceed(code);
     });
   }
   function escapeHTML(s){ var d=document.createElement('div'); d.textContent=s; return d.innerHTML; }
@@ -3001,6 +3106,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
   function doJoin(){
     var code = (document.getElementById('join-code').value||'').trim().toUpperCase();
     var err = document.getElementById('join-err');
+    if(USE_SUPA){ if(!currentUser()){ closeJoin(); afterAuth=function(){ openJoin(code); }; openModal('signin'); return; } supaDoJoin(code, err); return; }
     var inv = getInvites();
     var rec = inv[code];
     if(!rec || rec.used){ err.textContent='That invite code isn\u2019t valid. Ask your colleague to resend it.'; return; }
@@ -3208,7 +3314,7 @@ Man is ruled by Earth. Earth is ruled by Heaven. Heaven is ruled by the Way. The
 
   window.addEventListener('hashchange', render);
   document.getElementById('yr').textContent = new Date().getFullYear();
-  refreshAuthUI();   // auto sign-in on revisit
+  if(USE_SUPA){ supaBoot(); } else { refreshAuthUI(); }   // auto sign-in on revisit
   render();
 })();
 </script>
